@@ -7,6 +7,7 @@
 #include "Eigen/Dense"
 #include "ardrone_autonomy/Navdata.h"
 #include "ardrone_control/ROI.h"
+#include "ardrone_control/ROINumber.h"
 
 #define LOOP_RATE 20
 using namespace std;
@@ -345,6 +346,8 @@ void States::odometryCallback(const nav_msgs::Odometry &msg)
 Vector3f image_pos;
 Vector3f image_pos_pre;
 ros::Time image_stamp;
+ros::Time number_stamp;
+int number;
 
 void imagepositionCallback(const ardrone_control::ROI &msg)
 {
@@ -357,6 +360,12 @@ void imagepositionCallback(const ardrone_control::ROI &msg)
 
 }
 
+void numberCallback(const ardrone_control::ROINumber &msg)
+{
+	number = msg.image1;
+	number_stamp = ros::Time::now();
+}
+
 int main(int argc, char **argv)
 {
 	int keypress = 0;
@@ -366,6 +375,7 @@ int main(int argc, char **argv)
 	States state;
 	ros::NodeHandle n;
 	ros::Subscriber image_pos_sub = n.subscribe("/ROI", 1, imagepositionCallback);
+	ros::Subscriber number_sub = n.subscribe("/number_result", 1, numberCallback);
 	ros::Publisher cmd_pub = n.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
 	ros::Publisher takeoff_pub = n.advertise<std_msgs::Empty>("/ardrone/takeoff", 1);
 	ros::Publisher land_pub = n.advertise<std_msgs::Empty>("/ardrone/land", 1);
@@ -461,8 +471,8 @@ int main(int argc, char **argv)
 					vel_sp(2) = 0;
 					flight._state = STATE_INACCURATE;
 					if(flight._current_target == 0){
-						next_pos_sp(0) = flight.relative_landpos_w(flight._current_target,0);
-						next_pos_sp(1) = flight.relative_landpos_w(flight._current_target,1);
+						next_pos_sp(0) = flight.relative_landpos_w(flight._current_target,0)+state.pos_w(0);//Modify by CJ
+						next_pos_sp(1) = flight.relative_landpos_w(flight._current_target,1)+state.pos_w(1);//Modify by CJ
 					}
 					else{
 						next_pos_sp(0) = flight.relative_landpos_w(flight._current_target,0)+state.pos_w(0);
@@ -480,11 +490,23 @@ int main(int argc, char **argv)
 					}
 					break;
 				case STATE_ACCURATE_BEFORE_LANDING:
-					ROS_INFO("Ready to land\n");
-					vel_sp(0) = 0;
-					vel_sp(1) = 0;
-					vel_sp(2) = 0;
-					flight._state = STATE_LANDING;
+					dur = ros::Time::now() - number_stamp;
+					if(dur.toSec() > 1.0){
+						vel_sp(0) = 0;
+						vel_sp(1) = 0;
+						vel_sp(2) = 0;
+					}else{
+						if(number == flight._current_target + 1){
+							ROS_INFO("Ready to land\n");
+							vel_sp(0) = 0;
+							vel_sp(1) = 0;
+							vel_sp(2) = 0;
+							flight._state = STATE_LANDING;
+						}else{
+							flight._state = STATE_IDLE;
+							ROS_INFO("Wrong number!\n");
+						}
+					}
 					break;
 				case STATE_LANDING:
 					ROS_INFO("landed\n");

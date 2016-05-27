@@ -7,6 +7,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 #include "ardrone_control/ROI.h"
+#include "ardrone_autonomy/navdata_altitude.h"
 #include "image_process.h"
 
 using namespace cv;
@@ -19,36 +20,39 @@ public:
 private:
 	ros::NodeHandle n;
 	ros::Subscriber image_sub;
-	ros::Subscriber odometry_sub;
+	//ros::Subscriber odometry_sub;
+	ros::Subscriber altitude_sub;
 	ros::Publisher image_pub;
 	ros::Publisher ROI_image_pub;
 	double minarea;
-	double ROI_width;
+	double maxarea;
+	int ROI_width;
+	int ROI_height;
 	double target_image[10][2];
 	double x,y;
 
 	IplImage *source_image;
 	IplImage *source_image_resized;
-	IplImage *ROI_image;
 	IplImage temp;
 	IplConvKernel * myModel;
 	ardrone_control::ROI ROI_msg;
 
 	void imageCallback(const sensor_msgs::Image &msg);
-	void odometryCallback(const nav_msgs::Odometry &msg);
+	//void odometryCallback(const nav_msgs::Odometry &msg);
+	void altitudeCallback(const ardrone_autonomy::navdata_altitude &msg);
 
 };
 
 FindContour::FindContour()
 {
 	image_sub = n.subscribe("/ardrone/image_raw", 1, &FindContour::imageCallback,this);
-	odometry_sub = n.subscribe("/ardrone/odometry", 1, &FindContour::odometryCallback,this);
+	//odometry_sub = n.subscribe("/ardrone/odometry", 1, &FindContour::odometryCallback,this);
 	image_pub = n.advertise<ardrone_control::ROI>("/ROI", 1);
 	ROI_image_pub = n.advertise<sensor_msgs::Image>("/ROI_image", 1);
+	maxarea = 200000;
 	minarea = 15000;
 	ROI_width = 70;
 	source_image_resized = cvCreateImage(cvSize(640,360),IPL_DEPTH_8U, 3);
-	ROI_image = cvCreateImage(cvSize(70,70),IPL_DEPTH_8U, 3);
 	myModel = cvCreateStructuringElementEx(20,20,2,2,CV_SHAPE_RECT);
 }
 
@@ -91,8 +95,13 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 	 		cvSeqRemove(contour, 0); 
 	 		continue; 
 	 	}  
+	 	if (tmparea > maxarea)  
+	 	{  
+	 		cvSeqRemove(contour, 0); 
+	 		continue; 
+	 	}
 		CvRect aRect = cvBoundingRect(contour, 0 );
-		if ((aRect.width/aRect.height)<0.8 || (aRect.width/aRect.height)> 1.2)    
+		if ((aRect.width/aRect.height)<0.5 || (aRect.width/aRect.height)> 1.5)    
 		{    
 			cvSeqRemove(contour,0); 
 			continue;    
@@ -105,6 +114,8 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 		//draw a rectangle of the contour region
 		cvRectangle(image_threshold, cvPoint(aRect.x, aRect.y), cvPoint(aRect.x + aRect.width, aRect.y + aRect.height),CV_RGB(255,255, 255), 1, 8, 0);
 		cvRectangle(source_image_resized, cvPoint(aRect.x, aRect.y), cvPoint(aRect.x + aRect.width, aRect.y + aRect.height),CV_RGB(0,255, 0), 3, 8, 0);
+		ROI_width = aRect.width * 0.5;
+		ROI_height = aRect.height * 0.5;
 		count++;
 		
 	} 
@@ -116,9 +127,10 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 	{
 		CvRect rect;
 		rect.x = target_image[i][0] - ROI_width/2;
-		rect.y = target_image[i][1] - ROI_width/2;
+		rect.y = target_image[i][1] - ROI_height/2;
 		rect.width = ROI_width;
-		rect.height = ROI_width;
+		rect.height = ROI_height;
+		IplImage *ROI_image = cvCreateImage(cvSize(ROI_width, ROI_height), IPL_DEPTH_8U, 3);
 		//get the ROI region
 		cvSetImageROI(source_image_resized,rect);
 		cvCopy(source_image_resized,ROI_image);  
@@ -158,6 +170,7 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 			imshow("test3", cv_to_ros.image);
 			waitKey(1);
 		}	
+		cvReleaseImage(&ROI_image);
 	}
 	if(count != 0){
 		ROI_msg.header.stamp = ros::Time::now();
@@ -168,9 +181,29 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 	cvReleaseImage(&image_threshold);
 }
 
-void FindContour::odometryCallback(const nav_msgs::Odometry &msg)
+// void FindContour::odometryCallback(const nav_msgs::Odometry &msg)
+// {
+// 	//msg.pose.pose.position.z
+// }
+
+void FindContour::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
-	//msg.pose.pose.position.z
+	if(msg.altitude_vision/1000.0 < 1.5){
+		minarea = 50000;
+		maxarea = 200000;
+	}else if(msg.altitude_vision/1000.0 < 2.0){
+		minarea = 30000;
+		maxarea = 180000;
+	}else if(msg.altitude_vision/1000.0 < 2.5){
+		minarea = 20000;
+		maxarea = 160000;
+	}else if(msg.altitude_vision/1000.0 < 3.0){
+		minarea = 16000;
+		maxarea = 100000;
+	}else{
+		minarea = 12000;
+		maxarea = 50000;
+	}
 }
 
 
@@ -180,4 +213,3 @@ int main(int argc, char **argv)
 	FindContour FindContour;
 	ros::spin();
 }
-
