@@ -38,6 +38,9 @@ int move_flag2 = 0;
 float move_start_x = 0;
 float move_start_y = 0;
 
+float height_sp = 2.5;    //add by CJ
+bool altitude_correct = false;   //add by CJ
+
 //const float dists[10][2] = {{0, 0}, {82, -178}, {28, 328}, {66, -161}, {190, -156}, {284, 236}, {-282, 53}, {487, -10}, {-53, -271}, {-347, 105}};
 float coord[10][10][2];
 
@@ -387,6 +390,11 @@ void States::navCallback(const ardrone_autonomy::Navdata &msg)
 void States::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
 	pos_w(2) = msg.altitude_vision/1000.0;
+	if(absolute_f(height_sp - pos_w(2)) > 0.1){
+		altitude_correct = false;
+	}else{
+		altitude_correct = true;
+	}
 }
 
 
@@ -512,8 +520,8 @@ int main(int argc, char **argv)
 				if(state.drone_state == 2)//landed
 					takeoff_pub.publish(order);
 				else{//flying, takeoff completed
-					
-					next_pos_sp(2) = 2.5;
+					height_sp = 2.5;
+					next_pos_sp(2) = height_sp;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
@@ -521,28 +529,34 @@ int main(int argc, char **argv)
 				}
 				break;
 			case STATE_ACCURATE_AFTER_TAKEOFF:
-				isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
-				dur = ros::Time::now() - image_stamp;
-				if(dur.toSec() > 0.5 && dur.toSec() < 10.0){
+				if(altitude_correct){
+					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
+					dur = ros::Time::now() - image_stamp;
+					if(dur.toSec() > 0.5 && dur.toSec() < 10.0){
+						vel_sp(0) = 0;
+						vel_sp(1) = 0;
+						vel_sp(2) = 0;
+					}else if(dur.toSec() > 10.0){
+						if(state.pos_w(2) < 3.0){
+							flight._state = STATE_FIND_NUM_AFTER_TAKEOFF;
+
+						}else{
+							flight._state = STATE_FIND_NUM_AFTER_TAKEOFF_MOVE;
+							move_start_x = state.pos_w(0); //chg
+							move_start_y = state.pos_w(1);//chg
+						}
+					}
+				}else{
+					next_pos_sp(2) = height_sp;
+					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
-					vel_sp(2) = 0;
-				}else if(dur.toSec() > 10.0){
-					if(state.pos_w(2) < 3.0){
-						flight._state = STATE_FIND_NUM_AFTER_TAKEOFF;
-
-					}else{
-						flight._state = STATE_FIND_NUM_AFTER_TAKEOFF_MOVE;
-						move_start_x = state.pos_w(0); //chg
-						move_start_y = state.pos_w(1);//chg
-					}
 				}
 				break;
 			case STATE_IDLE:
 				isArrived = flight.idle_control(vel_sp);
 				break;
 			case STATE_INACCURATE:
-				
 				isArrived = flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
 				dur = ros::Time::now() - state.navdata_stamp;
 				if(dur.toSec() > 0.5){
@@ -552,20 +566,27 @@ int main(int argc, char **argv)
 				}
 				break;
 			case STATE_ACCURATE_BEFORE_LANDING:
-				isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
-				dur = ros::Time::now() - image_stamp;
-				if(dur.toSec() > 0.5 && dur.toSec() < 10.0){
+				if(altitude_correct){
+					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
+					dur = ros::Time::now() - image_stamp;
+					if(dur.toSec() > 0.5 && dur.toSec() < 10.0){
+						vel_sp(0) = 0;
+						vel_sp(1) = 0;
+						vel_sp(2) = 0;
+					}else if(dur.toSec() > 10.0){
+						if(state.pos_w(2) < 3.0){
+							flight._state = STATE_FIND_NUM_BEFORE_LANDING;
+						}else{
+							flight._state = STATE_FIND_NUM_BEFORE_LANDING_MOVE;
+							move_start_x = state.pos_w(0); //chg
+							move_start_y = state.pos_w(1);//chg
+						}
+					}
+				}else{
+					next_pos_sp(2) = height_sp;
+					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
-					vel_sp(2) = 0;
-				}else if(dur.toSec() > 10.0){
-					if(state.pos_w(2) < 3.0){
-						flight._state = STATE_FIND_NUM_BEFORE_LANDING;
-					}else{
-						flight._state = STATE_FIND_NUM_BEFORE_LANDING_MOVE;
-						move_start_x = state.pos_w(0); //chg
-						move_start_y = state.pos_w(1);//chg
-					}
 				}
 				break;
 			case STATE_LANDING:
@@ -578,13 +599,15 @@ int main(int argc, char **argv)
 				isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 				break;
 			case STATE_FIND_NUM_AFTER_TAKEOFF:
-				next_pos_sp(2) = 3.5;
+				height_sp = 3.5;
+				next_pos_sp(2) = height_sp;
 				isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 				vel_sp(0) = 0;
 				vel_sp(1) = 0;
 				break;
 			case STATE_FIND_NUM_BEFORE_LANDING:
-				next_pos_sp(2) = 3.5;
+				height_sp = 3.5;
+				next_pos_sp(2) = height_sp;
 				isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 				vel_sp(0) = 0;
 				vel_sp(1) = 0;
