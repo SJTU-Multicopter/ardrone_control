@@ -100,7 +100,7 @@ num_flight::num_flight()
 	Matrix<float, 3, Dynamic> relative_pos_world;
 	relative_pos_world.resize(3,9);
 	relative_pos_field<<
-	1.85, -1.75,0,
+	1.6, -1.5,0,
 	0.15,3.2,0,
 	0.7,-1.6,0,
 	1.85,-1.55,0,
@@ -133,7 +133,7 @@ bool num_flight::idle_control(Vector3f& vel_sp)
 
 bool num_flight::inaccurate_control(const Vector3f& _pos_sp, const Vector3f& _pos, Vector3f& vel_sp)
 {
-	float speed = 0.1;
+	float speed = 0.08;
 	bool is_arrived;
 	Vector3f err = _pos_sp - _pos;
 	err(2) = 0;
@@ -156,7 +156,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	static Vector2f err_last;
 	static Vector2f err_int;
 	static bool new_start = true;
-	float P_pos = 0.0001, D_pos = 0.00005, I_pos = 0;
+	float P_pos = 0.0002, D_pos = 0.00007, I_pos = 0;
 	Vector2f vel_sp_2d;
 	Vector2f image_center(320.0,180.0);
 	Vector2f image_pos_2d;
@@ -182,7 +182,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	
 	bool is_arrived;
 	float dist = err.norm();
-	if(dist > 30.0){
+	if(dist > 25.0){
 		is_arrived = false;
 	}
 	else{
@@ -195,7 +195,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 
 bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, Vector3f& vel_sp)
 {
-	float speed = 0.2;
+	float speed = 0.4;
 	bool is_arrived;
 	float err = _pos_sp(2) - _pos(2);
 	float dist = absolute_f(err);
@@ -410,7 +410,7 @@ int main(int argc, char **argv)
 					takeoff_pub.publish(order);
 				else{//flying, takeoff completed
 					
-					next_pos_sp(2) = 2.2;
+					next_pos_sp(2) = 2.5;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;

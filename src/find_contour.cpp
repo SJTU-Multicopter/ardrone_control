@@ -49,9 +49,10 @@ FindContour::FindContour()
 	//odometry_sub = n.subscribe("/ardrone/odometry", 1, &FindContour::odometryCallback,this);
 	image_pub = n.advertise<ardrone_control::ROI>("/ROI", 1);
 	ROI_image_pub = n.advertise<sensor_msgs::Image>("/ROI_image", 1);
-	maxarea = 200000;
-	minarea = 15000;
-	ROI_width = 70;
+	maxarea = 150000;
+	minarea = 13000;
+	ROI_width = 80;
+	ROI_height = 80;
 	source_image_resized = cvCreateImage(cvSize(640,360),IPL_DEPTH_8U, 3);
 	myModel = cvCreateStructuringElementEx(20,20,2,2,CV_SHAPE_RECT);
 }
@@ -73,7 +74,7 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 	Color_Detection(source_image_resized, image_threshold, x, y);	
 	//cvCopy(image_threshold,image_threshold_origin);
 
-	cvDilate(image_threshold, image_threshold, myModel, 1);
+	//cvDilate(image_threshold, image_threshold, myModel, 1);
 	//cvErode(image_threshold, image_threshold, myModel, 1);
 	cvShowImage("Dilate Image", image_threshold);
 	waitKey(1);
@@ -101,7 +102,7 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 	 		continue; 
 	 	}
 		CvRect aRect = cvBoundingRect(contour, 0 );
-		if ((aRect.width/aRect.height)<0.5 || (aRect.width/aRect.height)> 1.5)    
+		if ((aRect.width/aRect.height)<0.3 || (aRect.width/aRect.height)> 1.7)    
 		{    
 			cvSeqRemove(contour,0); 
 			continue;    
@@ -114,9 +115,12 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 		//draw a rectangle of the contour region
 		cvRectangle(image_threshold, cvPoint(aRect.x, aRect.y), cvPoint(aRect.x + aRect.width, aRect.y + aRect.height),CV_RGB(255,255, 255), 1, 8, 0);
 		cvRectangle(source_image_resized, cvPoint(aRect.x, aRect.y), cvPoint(aRect.x + aRect.width, aRect.y + aRect.height),CV_RGB(0,255, 0), 3, 8, 0);
-		ROI_width = aRect.width * 0.5;
-		ROI_height = aRect.height * 0.5;
+		
 		count++;
+		// if(count == 1){
+		// 	ROI_width = aRect.width * 0.5;
+		// 	ROI_height = aRect.height * 0.5;
+		// }
 		
 	} 
 	cvShowImage("Original Image", source_image_resized);
@@ -188,22 +192,22 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 
 void FindContour::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
-	if(msg.altitude_vision/1000.0 < 1.5){
-		minarea = 50000;
-		maxarea = 200000;
-	}else if(msg.altitude_vision/1000.0 < 2.0){
-		minarea = 30000;
-		maxarea = 180000;
-	}else if(msg.altitude_vision/1000.0 < 2.5){
-		minarea = 20000;
-		maxarea = 160000;
-	}else if(msg.altitude_vision/1000.0 < 3.0){
-		minarea = 16000;
-		maxarea = 100000;
-	}else{
-		minarea = 12000;
-		maxarea = 50000;
-	}
+	// if(msg.altitude_vision/1000.0 < 1.5){
+	// 	minarea = 50000;
+	// 	maxarea = 200000;
+	// }else if(msg.altitude_vision/1000.0 < 2.0){
+	// 	minarea = 30000;
+	// 	maxarea = 180000;
+	// }else if(msg.altitude_vision/1000.0 < 2.5){
+	// 	minarea = 20000;
+	// 	maxarea = 160000;
+	// }else if(msg.altitude_vision/1000.0 < 3.0){
+	// 	minarea = 16000;
+	// 	maxarea = 100000;
+	// }else{
+	// 	minarea = 12000;
+	// 	maxarea = 50000;
+	// }
 }
 
 
