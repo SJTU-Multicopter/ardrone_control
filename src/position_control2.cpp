@@ -9,8 +9,14 @@
 #include "ardrone_autonomy/navdata_altitude.h"
 #include "ardrone_control/ROI.h"
 #include "ardrone_control/ROINumber.h"
+#include <iostream>
 
 #define LOOP_RATE 20
+#define WAIT_TIME 60
+#define NORMAL_HEIGHT 1.0
+#define FIND_HEIGHT 1.5
+#define THR_HEIGHT  1.2
+#define SEARCH_SIZE 0.3
 using namespace std;
 using namespace Eigen;
 
@@ -32,6 +38,9 @@ ros::Time image_stamp;
 ros::Time number_stamp;
 int number;
 int number_last = 12;
+
+int counter_after_takeoff = 0;
+int counter_before_landing = 0;
 
 int move_flag1 = 0;
 int move_flag2 = 0;
@@ -168,16 +177,27 @@ bool num_flight::inaccurate_control(const Vector3f& _pos_sp, const Vector3f& _po
 	Vector3f err = _pos_sp - _pos;
 	err(2) = 0;
 	float dist = err.norm();
-	if(dist > 0.3){
+	if(dist > 0.6){
 		Vector3f direction = err / dist;
 		vel_sp = direction * speed;
-
 		is_arrived = false;
 	//	ROS_INFO("\npos(%f, %f)\nsetpt(%f, %f)\nvelsp(%f, %f)\n",_pos(0),_pos(1),_pos_sp(0),_pos_sp(1),vel_sp(0),vel_sp(1));
+	}else if(dist > 0.3)
+	{
+		ros::Duration dur;
+		dur = ros::Time::now() - image_stamp;
+		if(dur.toSec()< 0.5){
+			is_arrived = true;
+		}else{
+			Vector3f direction = err / dist;
+			vel_sp = direction * speed;
+			is_arrived = false;
+		}
 	}
 	else{
 		is_arrived = true;
 	}
+
 	return is_arrived;
 }
 
@@ -447,7 +467,7 @@ void calcCoords(float coord[10][10][2])
 	dists_world_temp = Rf*dists.transpose();
 	dists_world = dists_world_temp.transpose();
 
-	for (int i = 0; i < 10; ++i)
+	for (int i = 0; i < 9; ++i)
 	{
 		coord[i][i+1][0] = dists_world(i+1, 0);
 		coord[i][i+1][1] = dists_world(i+1, 1);
@@ -462,9 +482,9 @@ void calcCoords(float coord[10][10][2])
 			if (j < i)
 			{
 				coord[i][j][0] = -coord[j][i][0];
-				coord[j][i][1] = -coord[j][i][1];
+				coord[i][j][1] = -coord[j][i][1];
 			}
-			else if (j - i > 1)
+			if (j - i > 1)
 			{
 				for (int k = i; k < j; ++k)
 				{
@@ -474,6 +494,18 @@ void calcCoords(float coord[10][10][2])
 			}
 		}
 	}
+
+	for(int i=0;i<10;i++)
+	{
+		for(int j=0;j<10;j++)
+		{
+			cout<<coord[i][j][0]<<" ";
+			cout<<coord[i][j][1]<<"\t";
+
+		}
+		cout<<endl;
+	}
+	cout<<endl;
 }
 
 int main(int argc, char **argv)
@@ -520,7 +552,7 @@ int main(int argc, char **argv)
 				if(state.drone_state == 2)//landed
 					takeoff_pub.publish(order);
 				else{//flying, takeoff completed
-					height_sp = 2.5;
+					height_sp = NORMAL_HEIGHT;
 					next_pos_sp(2) = height_sp;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
@@ -532,12 +564,13 @@ int main(int argc, char **argv)
 				if(altitude_correct){
 					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
 					dur = ros::Time::now() - image_stamp;
-					if(dur.toSec() > 0.5 && dur.toSec() < 10.0){
+					if(dur.toSec() > 0.5 && counter_after_takeoff<=WAIT_TIME){
 						vel_sp(0) = 0;
 						vel_sp(1) = 0;
 						vel_sp(2) = 0;
-					}else if(dur.toSec() > 10.0){
-						if(state.pos_w(2) < 3.0){
+						counter_after_takeoff ++;
+					}else if(counter_after_takeoff > WAIT_TIME){
+						if(state.pos_w(2) < THR_HEIGHT){
 							flight._state = STATE_FIND_NUM_AFTER_TAKEOFF;
 
 						}else{
@@ -546,7 +579,9 @@ int main(int argc, char **argv)
 							move_start_y = state.pos_w(1);//chg
 
 						}
+						counter_after_takeoff = 0;
 					}
+
 				}else{
 					next_pos_sp(2) = height_sp;
 					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
@@ -570,18 +605,20 @@ int main(int argc, char **argv)
 				if(altitude_correct){
 					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
 					dur = ros::Time::now() - image_stamp;
-					if(dur.toSec() > 0.5 && dur.toSec() < 10.0){
+					if(dur.toSec() > 0.5 && counter_before_landing<=WAIT_TIME){
 						vel_sp(0) = 0;
 						vel_sp(1) = 0;
 						vel_sp(2) = 0;
-					}else if(dur.toSec() > 10.0){
-						if(state.pos_w(2) < 3.0){
+						counter_before_landing ++;
+					}else if(counter_before_landing>WAIT_TIME){
+						if(state.pos_w(2) < THR_HEIGHT){
 							flight._state = STATE_FIND_NUM_BEFORE_LANDING;
 						}else{
 							flight._state = STATE_FIND_NUM_BEFORE_LANDING_MOVE;
 							move_start_x = state.pos_w(0); //chg
 							move_start_y = state.pos_w(1);//chg
 						}
+						counter_before_landing =0;
 					}
 				}else{
 					next_pos_sp(2) = height_sp;
@@ -600,14 +637,14 @@ int main(int argc, char **argv)
 				isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 				break;
 			case STATE_FIND_NUM_AFTER_TAKEOFF:
-				height_sp = 3.5;
+				height_sp = FIND_HEIGHT;
 				next_pos_sp(2) = height_sp;
 				isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 				vel_sp(0) = 0;
 				vel_sp(1) = 0;
 				break;
 			case STATE_FIND_NUM_BEFORE_LANDING:
-				height_sp = 3.5;
+				height_sp = FIND_HEIGHT;
 				next_pos_sp(2) = height_sp;
 				isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 				vel_sp(0) = 0;
@@ -617,28 +654,28 @@ int main(int argc, char **argv)
 				switch(move_flag1)
 				{
 					case 0:
-					next_pos_sp(0) = move_start_x + 0.3;
+					next_pos_sp(0) = move_start_x + SEARCH_SIZE;
 					break;
 					case 1:
-					next_pos_sp(1) = move_start_y + 0.3;
+					next_pos_sp(1) = move_start_y + SEARCH_SIZE;
 					break;
 					case 2:
-					next_pos_sp(0) = move_start_x - 0.6;
+					next_pos_sp(0) = move_start_x - 2*SEARCH_SIZE;
 					break;
 					case 3:
-					next_pos_sp(1) = move_start_y - 0.6;
+					next_pos_sp(1) = move_start_y - 2*SEARCH_SIZE;
 					break;
 					case 4:
-					next_pos_sp(0) = move_start_x + 0.6;
+					next_pos_sp(0) = move_start_x + 2*SEARCH_SIZE;
 					break;
 					case 5:
-					next_pos_sp(0) = move_start_x - 0.3;
-					next_pos_sp(1) = move_start_y + 0.3;
+					next_pos_sp(0) = move_start_x - SEARCH_SIZE;
+					next_pos_sp(1) = move_start_y + SEARCH_SIZE;
 					break;
 				}
 				
 				isArrived = flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
-				if(isArrived) move_flag1++;
+				if(isArrived) {move_flag1++; cout<<"1 case "<<move_flag1<<" finished!"<<endl;}
 				if(move_flag1 > 5) move_flag1 = 0;
 				break;
 
@@ -646,28 +683,28 @@ int main(int argc, char **argv)
 				switch(move_flag2)
 				{
 					case 0:
-					next_pos_sp(0) = move_start_x + 0.3;
+					next_pos_sp(0) = move_start_x + SEARCH_SIZE;
 					break;
 					case 1:
-					next_pos_sp(1) = move_start_y + 0.3;
+					next_pos_sp(1) = move_start_y + SEARCH_SIZE;
 					break;
 					case 2:
-					next_pos_sp(0) = move_start_x - 0.6;
+					next_pos_sp(0) = move_start_x - 2*SEARCH_SIZE;
 					break;
 					case 3:
-					next_pos_sp(1) = move_start_y - 0.6;
+					next_pos_sp(1) = move_start_y - 2*SEARCH_SIZE;
 					break;
 					case 4:
-					next_pos_sp(0) = move_start_x + 0.6;
+					next_pos_sp(0) = move_start_x + 2*SEARCH_SIZE;
 					break;
 					case 5:
-					next_pos_sp(0) = move_start_x - 0.3;
-					next_pos_sp(1) = move_start_y + 0.3;
+					next_pos_sp(0) = move_start_x - SEARCH_SIZE;
+					next_pos_sp(1) = move_start_y + SEARCH_SIZE;
 					break;
 				}
 				
 				isArrived = flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
-				if(isArrived) move_flag2++;
+				if(isArrived) {move_flag2++;cout<<"2  case "<<move_flag2<<" finished!"<<endl;}
 				if(move_flag2 > 5) move_flag2 = 0;
 				break;
 
@@ -683,27 +720,34 @@ int main(int argc, char **argv)
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
 					vel_sp(2) = 0;
-					flight._state = STATE_INACCURATE;
+					
 					if(flight._current_target == 0){
 						next_pos_sp(0) = coord[0][flight._current_target+1][0]+state.pos_w(0);//Modify by CJ
 						next_pos_sp(1) = coord[0][flight._current_target+1][1]+state.pos_w(1);//Modify by CJ
-					    if(flight._current_target+1 == 2||flight._current_target+1 == 6||flight._current_target+1 == 7) 
-				    	{
-				    		move_flag1=0;
-				    		move_flag2=0;
-				    	}
-					    else 
-					    {
-					    	move_flag1 = 2;
-					    	move_flag2 = 2;
-					    }
+
+			    		move_flag1=3;
+			    		move_flag2=0;
+			    		flight._state = STATE_INACCURATE;
+
 					}
 					else{
 						if(number < 10)
 						{	
 							next_pos_sp(0) = coord[number][flight._current_target+1][0]+state.pos_w(0);
 							next_pos_sp(1) = coord[number][flight._current_target+1][1]+state.pos_w(1);
+							if(flight._current_target+1 == 2||flight._current_target+1 == 6||flight._current_target+1 == 7) 
+					    	{
+					    		move_flag1=5;
+					    		move_flag2=5;
+					    	}
+						    else 
+						    {
+						    	move_flag1 = 0;
+						    	move_flag2 = 0;
+						    }
+						    flight._state = STATE_INACCURATE;
 						}
+
 
 					}
 					break;
@@ -767,7 +811,7 @@ int main(int argc, char **argv)
 		Vector3f vel_sp_b;
 		if(flight._state == STATE_ACCURATE_BEFORE_LANDING || flight._state == STATE_ACCURATE_AFTER_TAKEOFF){
 			vel_sp_b = vel_sp;
-			vel_sp_b(2)=0;
+			//vel_sp_b(2)=0;
 		}
 		else if(flight._state == STATE_INACCURATE){
 			vel_sp_b = state.R_body.transpose() * vel_sp;
