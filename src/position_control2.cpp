@@ -11,13 +11,19 @@
 #include "ardrone_control/ROINumber.h"
 
 #define LOOP_RATE 20
-#define height_sp 2.5
+#define HEIGHT_SP 2.5
 using namespace std;
 using namespace Eigen;
 
 bool first_pos_received = false;
 bool first_yaw_received = false;
 bool altitude_correct = false;
+
+Vector3f image_pos;
+Vector3f image_pos_pre;
+ros::Time image_stamp;
+ros::Time number_stamp;
+int number;
 
 int constrain(int a, int b, int c){return ((a)<(b)?(b):(a)>(c)?c:a);}
 int dead_zone(int a, int b){return ((a)>(b)?(a):(a)<(-b)?(a):0);}
@@ -144,16 +150,27 @@ bool num_flight::inaccurate_control(const Vector3f& _pos_sp, const Vector3f& _po
 	Vector3f err = _pos_sp - _pos;
 	err(2) = 0;
 	float dist = err.norm();
-	if(dist > 0.3){
+	if(dist > 0.6){
 		Vector3f direction = err / dist;
 		vel_sp = direction * speed;
-
 		is_arrived = false;
 	//	ROS_INFO("\npos(%f, %f)\nsetpt(%f, %f)\nvelsp(%f, %f)\n",_pos(0),_pos(1),_pos_sp(0),_pos_sp(1),vel_sp(0),vel_sp(1));
+	}else if(dist > 0.3)
+	{
+		ros::Duration dur;
+		dur = ros::Time::now() - image_stamp;
+		if(dur.toSec()< 0.5){
+			is_arrived = true;
+		}else{
+			Vector3f direction = err / dist;
+			vel_sp = direction * speed;
+			is_arrived = false;
+		}
 	}
 	else{
 		is_arrived = true;
 	}
+
 	return is_arrived;
 }
 
@@ -357,18 +374,14 @@ void States::navCallback(const ardrone_autonomy::Navdata &msg)
 void States::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
 	pos_w(2) = msg.altitude_vision/1000.0;
-	if(absolute_f(height_sp - pos_w(2)) > 0.1){
+	if(absolute_f(HEIGHT_SP - pos_w(2)) > 0.1){
 		altitude_correct = false;
 	}else{
 		altitude_correct = true;
 	}
 }
 
-Vector3f image_pos;
-Vector3f image_pos_pre;
-ros::Time image_stamp;
-ros::Time number_stamp;
-int number;
+
 
 void imagepositionCallback(const ardrone_control::ROI &msg)
 {
@@ -432,7 +445,7 @@ int main(int argc, char **argv)
 					takeoff_pub.publish(order);
 				else{//flying, takeoff completed
 					
-					next_pos_sp(2) = height_sp;
+					next_pos_sp(2) = HEIGHT_SP;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
@@ -449,7 +462,7 @@ int main(int argc, char **argv)
 						vel_sp(2) = 0;
 					}	
 				}else{
-					next_pos_sp(2) = height_sp;
+					next_pos_sp(2) = HEIGHT_SP;
 					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
@@ -479,7 +492,7 @@ int main(int argc, char **argv)
 						vel_sp(2) = 0;
 					}	
 				}else{
-					next_pos_sp(2) = height_sp;
+					next_pos_sp(2) = HEIGHT_SP;
 					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;

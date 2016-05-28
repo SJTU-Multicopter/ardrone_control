@@ -192,22 +192,13 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 
 void FindContour::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
-	// if(msg.altitude_vision/1000.0 < 1.5){
-	// 	minarea = 50000;
-	// 	maxarea = 200000;
-	// }else if(msg.altitude_vision/1000.0 < 2.0){
-	// 	minarea = 30000;
-	// 	maxarea = 180000;
-	// }else if(msg.altitude_vision/1000.0 < 2.5){
-	// 	minarea = 20000;
-	// 	maxarea = 160000;
-	// }else if(msg.altitude_vision/1000.0 < 3.0){
-	// 	minarea = 16000;
-	// 	maxarea = 100000;
-	// }else{
-	// 	minarea = 12000;
-	// 	maxarea = 50000;
-	// }
+	if(msg.altitude_vision/1000.0 < 3.0){
+		minarea = 13000;
+		maxarea = 150000;
+	}else{
+		minarea = 10000;
+		maxarea = 50000;
+	}
 }
 
 
