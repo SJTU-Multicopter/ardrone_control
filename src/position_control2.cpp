@@ -6,6 +6,7 @@
 #include "std_msgs/Empty.h"
 #include "Eigen/Dense"
 #include "ardrone_autonomy/Navdata.h"
+#include "ardrone_autonomy/navdata_altitude.h"
 #include "ardrone_control/ROI.h"
 #include "ardrone_control/ROINumber.h"
 
@@ -77,9 +78,11 @@ private:
 	ros::NodeHandle n;
 	ros::Subscriber states_sub;
 	ros::Subscriber nav_sub;
-	ros::Subscriber odometry_sub;
+	ros::Subscriber altitude_sub;
+	//ros::Subscriber odometry_sub;
 	void navCallback(const ardrone_autonomy::Navdata &msg);
-	void odometryCallback(const nav_msgs::Odometry &msg);
+	void altitudeCallback(const ardrone_autonomy::navdata_altitude &msg);
+	//void odometryCallback(const nav_msgs::Odometry &msg);
 };
 
 num_flight::num_flight()
@@ -199,14 +202,26 @@ bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, 
 	bool is_arrived;
 	float err = _pos_sp(2) - _pos(2);
 	float dist = absolute_f(err);
-	if(dist > 0.1){
-		float direction = err / dist;
-		vel_sp(2) = direction * speed;
-		is_arrived = false;
-	}
-	else{
-		is_arrived = true;
-	}
+	// if(dist > 0.1){
+	// 	float direction = err / dist;
+	// 	vel_sp(2) = direction * speed;
+	// 	is_arrived = false;
+	// }
+	// else{
+	// 	is_arrived = true;
+	// }
+	if(_pos(2) < 0.0001){
+ 		vel_sp(2) = -0.2;
+ 	}else{
+ 		if(dist > 0.1){
+ 			float direction = err / dist;
+ 			vel_sp(2) = direction * speed;
+ 			is_arrived = false;
+ 		}
+ 		else{
+ 			is_arrived = true;
+ 		}
+  	}
 	vel_sp(0) = 0;
 	vel_sp(1) = 0;
 	return is_arrived;
@@ -216,7 +231,8 @@ bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, 
 States::States()
 {
 	nav_sub = n.subscribe("/ardrone/navdata", 1, &States::navCallback,this);
-	odometry_sub = n.subscribe("/ardrone/odometry", 1, &States::odometryCallback,this);
+	altitude_sub = n.subscribe("/ardrone/navdata_altitude", 1, &States::altitudeCallback,this);
+	//odometry_sub = n.subscribe("/ardrone/odometry", 1, &States::odometryCallback,this);
 	pose_body_pub = n.advertise<geometry_msgs::PoseStamped>("/ardrone/position_body", 1);
 	pose_world_pub = n.advertise<geometry_msgs::PoseStamped>("/ardrone/position_world", 1);
 	for(int i=0;i<3;i++){
@@ -338,9 +354,14 @@ void States::navCallback(const ardrone_autonomy::Navdata &msg)
 	drone_state = msg.state;
 }
 
-void States::odometryCallback(const nav_msgs::Odometry &msg)
+// void States::odometryCallback(const nav_msgs::Odometry &msg)
+// {
+// 	pos_w(2) = msg.pose.pose.position.z;
+// }
+
+void States::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
-	pos_w(2) = msg.pose.pose.position.z;
+	pos_w(2) = msg.altitude_vision/1000.0;
 }
 
 Vector3f image_pos;
