@@ -544,6 +544,7 @@ int main(int argc, char **argv)
 							flight._state = STATE_FIND_NUM_AFTER_TAKEOFF_MOVE;
 							move_start_x = state.pos_w(0); //chg
 							move_start_y = state.pos_w(1);//chg
+
 						}
 					}
 				}else{
@@ -616,23 +617,23 @@ int main(int argc, char **argv)
 				switch(move_flag1)
 				{
 					case 0:
-					next_pos_sp(0) = move_start_x + 0.5;
+					next_pos_sp(0) = move_start_x + 0.3;
 					break;
 					case 1:
-					next_pos_sp(1) = move_start_y + 0.5;
+					next_pos_sp(1) = move_start_y + 0.3;
 					break;
 					case 2:
-					next_pos_sp(0) = move_start_x - 1.0;
+					next_pos_sp(0) = move_start_x - 0.6;
 					break;
 					case 3:
-					next_pos_sp(1) = move_start_y - 1.0;
+					next_pos_sp(1) = move_start_y - 0.6;
 					break;
 					case 4:
-					next_pos_sp(0) = move_start_x + 1.0;
+					next_pos_sp(0) = move_start_x + 0.6;
 					break;
 					case 5:
-					next_pos_sp(0) = move_start_x - 0.5;
-					next_pos_sp(1) = move_start_y + 0.5;
+					next_pos_sp(0) = move_start_x - 0.3;
+					next_pos_sp(1) = move_start_y + 0.3;
 					break;
 				}
 				
@@ -645,23 +646,23 @@ int main(int argc, char **argv)
 				switch(move_flag2)
 				{
 					case 0:
-					next_pos_sp(0) = move_start_x + 0.5;
+					next_pos_sp(0) = move_start_x + 0.3;
 					break;
 					case 1:
-					next_pos_sp(1) = move_start_y + 0.5;
+					next_pos_sp(1) = move_start_y + 0.3;
 					break;
 					case 2:
-					next_pos_sp(0) = move_start_x - 1.0;
+					next_pos_sp(0) = move_start_x - 0.6;
 					break;
 					case 3:
-					next_pos_sp(1) = move_start_y - 1.0;
+					next_pos_sp(1) = move_start_y - 0.6;
 					break;
 					case 4:
-					next_pos_sp(0) = move_start_x + 1.0;
+					next_pos_sp(0) = move_start_x + 0.6;
 					break;
 					case 5:
-					next_pos_sp(0) = move_start_x - 0.5;
-					next_pos_sp(1) = move_start_y + 0.5;
+					next_pos_sp(0) = move_start_x - 0.3;
+					next_pos_sp(1) = move_start_y + 0.3;
 					break;
 				}
 				
@@ -686,6 +687,16 @@ int main(int argc, char **argv)
 					if(flight._current_target == 0){
 						next_pos_sp(0) = coord[0][flight._current_target+1][0]+state.pos_w(0);//Modify by CJ
 						next_pos_sp(1) = coord[0][flight._current_target+1][1]+state.pos_w(1);//Modify by CJ
+					    if(flight._current_target+1 == 2||flight._current_target+1 == 6||flight._current_target+1 == 7) 
+				    	{
+				    		move_flag1=0;
+				    		move_flag2=0;
+				    	}
+					    else 
+					    {
+					    	move_flag1 = 2;
+					    	move_flag2 = 2;
+					    }
 					}
 					else{
 						if(number < 10)
