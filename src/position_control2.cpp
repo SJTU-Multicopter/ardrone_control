@@ -25,10 +25,16 @@ int maximum(int a, int b){return (a>b?a:b);}
 int absolute(int a){return (a>0?a:-a);}
 float absolute_f(float a){return (a>0?a:-a);}
 
+Vector3f image_pos;
+Vector3f image_pos_pre;
+ros::Time image_stamp;
+ros::Time number_stamp;
+int number;
+int number_last = 12;
+
 const float dists[10][2] = {{0, 0}, {82, -178}, {28, 328}, {66, -161}, {190, -156}, {284, 236}, {-282, 53}, {487, -10}, {-53, -271}, {-347, 105}};
 float coord[10][10][2];
 
-void calcCoords(const float dists[], float coord);
 
 class num_flight
 {
@@ -40,9 +46,7 @@ class num_flight
 	#define STATE_LANDING 5
 	#define STATE_ON_GROUND 6
 	#define STATE_ALT 7
-	#ifndef STATE_FIND_NUM
-	#define STATE_FIND_NUM 8
-	#endif
+
 public:
 	unsigned char _state;//idle, or inaccurate pos_ctrl, or accurate image_ctrl
 	Matrix<float, Dynamic, 2> relative_landpos_w;
@@ -195,6 +199,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	if(dist > 25.0){
 		is_arrived = false;
 	}
+
 	else{
 		is_arrived = true;
 	}
@@ -353,11 +358,7 @@ void States::odometryCallback(const nav_msgs::Odometry &msg)
 	pos_w(2) = msg.pose.pose.position.z;
 }
 
-Vector3f image_pos;
-Vector3f image_pos_pre;
-ros::Time image_stamp;
-ros::Time number_stamp;
-int number;
+
 
 void imagepositionCallback(const ardrone_control::ROI &msg)
 {
@@ -372,11 +373,12 @@ void imagepositionCallback(const ardrone_control::ROI &msg)
 
 void numberCallback(const ardrone_control::ROINumber &msg)
 {
-	number = msg.image1;
+	if(msg.image1 == number_last) number = msg.image1;
+	number_last =  msg.image1;
 	number_stamp = ros::Time::now();
 }
 
-void calcCoords(const float dists[], float coord[]);
+void calcCoords(const float dists[10][2], float coord[10][10][2])
 {
 	for (int i = 0; i < 10; ++i)
 	{
@@ -406,15 +408,15 @@ void calcCoords(const float dists[], float coord[]);
 		}
 	}
 
-	// for (int i = 0; i < 10; ++i)
-	// {
-	// 	for (int j = 0; j < 10; ++j)
-	// 	{
-	// 		coord[i][j][2] = sqrtf(coord[i][j][0] * coord[i][j][0] + coord[i][j][1] * coord[i][j][1]);
-	// 		coord[i][j][0] /= coord[i][j][2];
-	// 		coord[i][j][1] /= coord[i][j][2];
-	// 	}
-	// }
+	for (int i = 0; i < 10; ++i)
+	{
+		for (int j = 0; j < 10; ++j)
+		{
+			// coord[i][j][2] = sqrtf(coord[i][j][0] * coord[i][j][0] + coord[i][j][1] * coord[i][j][1]);
+			coord[i][j][0] /= 100;
+			coord[i][j][1] /= 100;
+		}
+	}
 }
 
 int main(int argc, char **argv)
@@ -523,12 +525,16 @@ int main(int argc, char **argv)
 					vel_sp(2) = 0;
 					flight._state = STATE_INACCURATE;
 					if(flight._current_target == 0){
-						next_pos_sp(0) = flight.relative_landpos_w(flight._current_target,0)+state.pos_w(0);//Modify by CJ
-						next_pos_sp(1) = flight.relative_landpos_w(flight._current_target,1)+state.pos_w(1);//Modify by CJ
+						next_pos_sp(0) = coord[0][flight._current_target+1][0]+state.pos_w(0);//Modify by CJ
+						next_pos_sp(1) = coord[0][flight._current_target+1][1]+state.pos_w(1);//Modify by CJ
 					}
 					else{
-						next_pos_sp(0) = flight.relative_landpos_w(flight._current_target,0)+state.pos_w(0);
-						next_pos_sp(1) = flight.relative_landpos_w(flight._current_target,1)+state.pos_w(1);
+						if(number < 10)
+						{	
+							next_pos_sp(0) = coord[number][flight._current_target+1][0]+state.pos_w(0);
+							next_pos_sp(1) = coord[number][flight._current_target+1][1]+state.pos_w(1);
+						}
+
 					}
 					break;
 				case STATE_INACCURATE:
@@ -555,7 +561,8 @@ int main(int argc, char **argv)
 							vel_sp(2) = 0;
 							flight._state = STATE_LANDING;
 						}else{
-							flight._state = STATE_IDLE;
+							//flight._state = STATE_IDLE;
+							flight._state=STATE_ACCURATE_AFTER_TAKEOFF; //modified by Chen
 							ROS_INFO("Wrong number!\n");
 						}
 					}
