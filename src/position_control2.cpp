@@ -6,15 +6,18 @@
 #include "std_msgs/Empty.h"
 #include "Eigen/Dense"
 #include "ardrone_autonomy/Navdata.h"
+#include "ardrone_autonomy/navdata_altitude.h"
 #include "ardrone_control/ROI.h"
 #include "ardrone_control/ROINumber.h"
 
 #define LOOP_RATE 20
+#define height_sp 2.5
 using namespace std;
 using namespace Eigen;
 
 bool first_pos_received = false;
 bool first_yaw_received = false;
+bool altitude_correct = false;
 
 int constrain(int a, int b, int c){return ((a)<(b)?(b):(a)>(c)?c:a);}
 int dead_zone(int a, int b){return ((a)>(b)?(a):(a)<(-b)?(a):0);}
@@ -77,9 +80,12 @@ private:
 	ros::NodeHandle n;
 	ros::Subscriber states_sub;
 	ros::Subscriber nav_sub;
-	ros::Subscriber odometry_sub;
+	ros::Subscriber altitude_sub;
+	//ros::Subscriber odometry_sub;
 	void navCallback(const ardrone_autonomy::Navdata &msg);
-	void odometryCallback(const nav_msgs::Odometry &msg);
+	void altitudeCallback(const ardrone_autonomy::navdata_altitude &msg);
+	//void odometryCallback(const nav_msgs::Odometry &msg);
+
 };
 
 num_flight::num_flight()
@@ -199,13 +205,17 @@ bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, 
 	bool is_arrived;
 	float err = _pos_sp(2) - _pos(2);
 	float dist = absolute_f(err);
-	if(dist > 0.1){
-		float direction = err / dist;
-		vel_sp(2) = direction * speed;
-		is_arrived = false;
-	}
-	else{
-		is_arrived = true;
+	if(_pos(2) < 0.0001){
+		vel_sp(2) = -0.3;
+	}else{
+		if(dist > 0.1){
+			float direction = err / dist;
+			vel_sp(2) = direction * speed;
+			is_arrived = false;
+		}
+		else{
+			is_arrived = true;
+		}
 	}
 	vel_sp(0) = 0;
 	vel_sp(1) = 0;
@@ -216,7 +226,8 @@ bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, 
 States::States()
 {
 	nav_sub = n.subscribe("/ardrone/navdata", 1, &States::navCallback,this);
-	odometry_sub = n.subscribe("/ardrone/odometry", 1, &States::odometryCallback,this);
+	//odometry_sub = n.subscribe("/ardrone/odometry", 1, &States::odometryCallback,this);
+	altitude_sub = n.subscribe("/ardrone/navdata_altitude", 1, &States::altitudeCallback,this);
 	pose_body_pub = n.advertise<geometry_msgs::PoseStamped>("/ardrone/position_body", 1);
 	pose_world_pub = n.advertise<geometry_msgs::PoseStamped>("/ardrone/position_world", 1);
 	for(int i=0;i<3;i++){
@@ -338,9 +349,19 @@ void States::navCallback(const ardrone_autonomy::Navdata &msg)
 	drone_state = msg.state;
 }
 
-void States::odometryCallback(const nav_msgs::Odometry &msg)
+// void States::odometryCallback(const nav_msgs::Odometry &msg)
+// {
+// 	pos_w(2) = msg.pose.pose.position.z;
+// }
+
+void States::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
-	pos_w(2) = msg.pose.pose.position.z;
+	pos_w(2) = msg.altitude_vision/1000.0;
+	if(absolute_f(height_sp - pos_w(2)) > 0.1){
+		altitude_correct = false;
+	}else{
+		altitude_correct = true;
+	}
 }
 
 Vector3f image_pos;
@@ -385,6 +406,7 @@ int main(int argc, char **argv)
 
 	std_msgs::Empty order;
 	bool isArrived = false;
+
 	Vector3f vel_sp(0.0, 0.0, 0.0);
 	Vector3f next_pos_sp(0.0, 0.0, 0.0);
 	geometry_msgs::Twist cmd;
@@ -403,14 +425,14 @@ int main(int argc, char **argv)
 	{
 		
 		ros::Duration dur;
-        isArrived = false;
+       	 	isArrived = false;
 		switch(flight._state){
 			case STATE_TAKEOFF:
 				if(state.drone_state == 2)//landed
 					takeoff_pub.publish(order);
 				else{//flying, takeoff completed
 					
-					next_pos_sp(2) = 2.5;
+					next_pos_sp(2) = height_sp;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
@@ -418,13 +440,21 @@ int main(int argc, char **argv)
 				}
 				break;
 			case STATE_ACCURATE_AFTER_TAKEOFF:
-				isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
-				dur = ros::Time::now() - image_stamp;
-				if(dur.toSec() > 0.5){
+				if(altitude_correct){
+					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
+					dur = ros::Time::now() - image_stamp;
+					if(dur.toSec() > 0.5){
+						vel_sp(0) = 0;
+						vel_sp(1) = 0;
+						vel_sp(2) = 0;
+					}	
+				}else{
+					next_pos_sp(2) = height_sp;
+					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
-					vel_sp(2) = 0;
 				}
+				
 				break;
 			case STATE_IDLE:
 				isArrived = flight.idle_control(vel_sp);
@@ -440,13 +470,21 @@ int main(int argc, char **argv)
 				}
 				break;
 			case STATE_ACCURATE_BEFORE_LANDING:
-				isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
-				dur = ros::Time::now() - image_stamp;
-				if(dur.toSec() > 0.5){
+				if(altitude_correct){
+					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
+					dur = ros::Time::now() - image_stamp;
+					if(dur.toSec() > 0.5){
+						vel_sp(0) = 0;
+						vel_sp(1) = 0;
+						vel_sp(2) = 0;
+					}	
+				}else{
+					next_pos_sp(2) = height_sp;
+					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
-					vel_sp(2) = 0;
 				}
+				
 				break;
 			case STATE_LANDING:
 				land_pub.publish(order);
@@ -518,8 +556,8 @@ int main(int argc, char **argv)
 						flight._state = STATE_TAKEOFF;
 
 					}
-                    vel_sp(0) = 0;
-                    vel_sp(1) = 0;
+			                vel_sp(0) = 0;
+			                vel_sp(1) = 0;
 					break;
 			}
 		}
