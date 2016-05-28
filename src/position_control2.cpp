@@ -162,7 +162,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	static Vector2f err_last;
 	static Vector2f err_int;
 	static bool new_start = true;
-	float P_pos = 0.0002, D_pos = 0.00007, I_pos = 0;
+	float P_pos = 0.0001, D_pos = 0.00007, I_pos = 0;
 	Vector2f vel_sp_2d;
 	Vector2f image_center(320.0,180.0);
 	Vector2f image_pos_2d;
@@ -564,7 +564,6 @@ int main(int argc, char **argv)
 		Vector3f vel_sp_b;
 		if(flight._state == STATE_ACCURATE_BEFORE_LANDING || flight._state == STATE_ACCURATE_AFTER_TAKEOFF){
 			vel_sp_b = vel_sp;
-			vel_sp_b(2)=0;
 		}
 		else if(flight._state == STATE_INACCURATE){
 			vel_sp_b = state.R_body.transpose() * vel_sp;
