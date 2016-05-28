@@ -24,6 +24,12 @@ int minimum(int a, int b){return (a>b?b:a);}
 int maximum(int a, int b){return (a>b?a:b);}
 int absolute(int a){return (a>0?a:-a);}
 float absolute_f(float a){return (a>0?a:-a);}
+
+const float dists[10][2] = {{0, 0}, {82, -178}, {28, 328}, {66, -161}, {190, -156}, {284, 236}, {-282, 53}, {487, -10}, {-53, -271}, {-347, 105}};
+float coord[10][10][2];
+
+void calcCoords(const float dists[], float coord);
+
 class num_flight
 {
 	#define STATE_IDLE 0
@@ -34,6 +40,9 @@ class num_flight
 	#define STATE_LANDING 5
 	#define STATE_ON_GROUND 6
 	#define STATE_ALT 7
+	#ifndef STATE_FIND_NUM
+	#define STATE_FIND_NUM 8
+	#endif
 public:
 	unsigned char _state;//idle, or inaccurate pos_ctrl, or accurate image_ctrl
 	Matrix<float, Dynamic, 2> relative_landpos_w;
@@ -48,6 +57,7 @@ public:
 private:
 	
 };
+
 class States
 {
 public:
@@ -366,6 +376,47 @@ void numberCallback(const ardrone_control::ROINumber &msg)
 	number_stamp = ros::Time::now();
 }
 
+void calcCoords(const float dists[], float coord[]);
+{
+	for (int i = 0; i < 10; ++i)
+	{
+		coord[i][i+1][0] = dists[i+1][0];
+		coord[i][i+1][1] = dists[i+1][1];
+		coord[i][i][0] = 0;
+		coord[i][i][1] = 0;
+	}
+
+	for (int i = 0; i < 10; ++i)
+	{
+		for (int j = 0; j < 10; ++j)
+		{
+			if (j < i)
+			{
+				coord[i][j][0] = -coord[j][i][0];
+				coord[j][i][1] = -coord[j][i][1];
+			}
+			else if (j - i > 1)
+			{
+				for (int k = i; k < j; ++k)
+				{
+					coord[i][j][0] += coord[k][k + 1][0];
+					coord[i][j][1] += coord[k][k + 1][1];
+				}
+			}
+		}
+	}
+
+	// for (int i = 0; i < 10; ++i)
+	// {
+	// 	for (int j = 0; j < 10; ++j)
+	// 	{
+	// 		coord[i][j][2] = sqrtf(coord[i][j][0] * coord[i][j][0] + coord[i][j][1] * coord[i][j][1]);
+	// 		coord[i][j][0] /= coord[i][j][2];
+	// 		coord[i][j][1] /= coord[i][j][2];
+	// 	}
+	// }
+}
+
 int main(int argc, char **argv)
 {
 	int keypress = 0;
@@ -389,6 +440,7 @@ int main(int argc, char **argv)
 	Vector3f next_pos_sp(0.0, 0.0, 0.0);
 	geometry_msgs::Twist cmd;
 
+	calcCoords(dists, coord);
 
 	flight._state = STATE_TAKEOFF;
 //	next_pos_sp(2) = state.pos_w(2);
