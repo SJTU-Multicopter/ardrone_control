@@ -13,10 +13,16 @@
 
 #define LOOP_RATE 20
 #define WAIT_TIME 60
-#define NORMAL_HEIGHT 1.0
-#define FIND_HEIGHT 1.5
-#define THR_HEIGHT  1.2
+#define NORMAL_HEIGHT 2.0
+#define FIND_HEIGHT 2.5
+#define THR_HEIGHT  2.2
+
+// #define NORMAL_HEIGHT 1.5
+// #define FIND_HEIGHT 2.0
+// #define THR_HEIGHT  1.7
+
 #define SEARCH_SIZE 0.3
+//#define TAKEOFF_OFFSET 0.2
 using namespace std;
 using namespace Eigen;
 
@@ -36,6 +42,7 @@ Vector3f image_pos;
 Vector3f image_pos_pre;
 ros::Time image_stamp;
 ros::Time number_stamp;
+Vector3f landed_pos(0,0,0);
 int number;
 int number_last = 12;
 
@@ -177,7 +184,7 @@ bool num_flight::inaccurate_control(const Vector3f& _pos_sp, const Vector3f& _po
 	Vector3f err = _pos_sp - _pos;
 	err(2) = 0;
 	float dist = err.norm();
-	if(dist > 0.6){
+	if(dist > 0.8){
 		Vector3f direction = err / dist;
 		vel_sp = direction * speed;
 		is_arrived = false;
@@ -206,7 +213,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	static Vector2f err_last;
 	static Vector2f err_int;
 	static bool new_start = true;
-	float P_pos = 0.0002, D_pos = 0.00007, I_pos = 0;
+	float P_pos = 0.00015 ,D_pos = 0.00007, I_pos = 0.0;
 	Vector2f vel_sp_2d;
 	Vector2f image_center(320.0,180.0);
 	Vector2f image_pos_2d;
@@ -232,12 +239,14 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	
 	bool is_arrived;
 	float dist = err.norm();
-	if(dist > 25.0){
+	if(dist > 30.0){
 		is_arrived = false;
 	}
 
 	else{
 		is_arrived = true;
+		err_int(0)=0;
+		err_int(1)=0;
 	}
 	err_last = err;
 	err_int += err / LOOP_RATE;
@@ -261,7 +270,7 @@ bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, 
 	if(_pos(2) < 0.0001){
  		vel_sp(2) = -0.2;
  	}else{
- 		if(dist > 0.1){
+ 		if(dist > 0.2){
  			float direction = err / dist;
  			vel_sp(2) = direction * speed;
  			is_arrived = false;
@@ -270,8 +279,6 @@ bool num_flight::altitude_change(const Vector3f& _pos_sp, const Vector3f& _pos, 
  			is_arrived = true;
  		}
   	}
-	vel_sp(0) = 0;
-	vel_sp(1) = 0;
 	return is_arrived;
 }
 
@@ -446,7 +453,7 @@ void calcCoords(float coord[10][10][2])
 	dists<<
 	0.0, 0.0, 0.0,
 	0.82,-1.78,0.0,
-	0.28,3.28,0.0,
+	0.28,2.78,0.0,
 	0.66,-1.61,0.0,
 	1.9,-1.56,0.0,
 	2.84,2.36,0.0,
@@ -549,12 +556,16 @@ int main(int argc, char **argv)
         	isArrived = false;
 		switch(flight._state){
 			case STATE_TAKEOFF:
-				if(state.drone_state == 2)//landed
+				if(state.drone_state == 2){//landed
 					takeoff_pub.publish(order);
+					landed_pos=state.pos_w;
+				}
 				else{//flying, takeoff completed
 					height_sp = NORMAL_HEIGHT;
 					next_pos_sp(2) = height_sp;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
+					// next_pos_sp(1) = landed_pos(1)+TAKEOFF_OFFSET;
+					// flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
 					
@@ -593,6 +604,7 @@ int main(int argc, char **argv)
 				isArrived = flight.idle_control(vel_sp);
 				break;
 			case STATE_INACCURATE:
+				
 				isArrived = flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
 				dur = ros::Time::now() - state.navdata_stamp;
 				if(dur.toSec() > 0.5){
@@ -600,6 +612,7 @@ int main(int argc, char **argv)
 					vel_sp(1) = 0;
 					vel_sp(2) = 0;
 				}
+
 				break;
 			case STATE_ACCURATE_BEFORE_LANDING:
 				if(altitude_correct){
@@ -784,6 +797,7 @@ int main(int argc, char **argv)
 				case STATE_LANDING:
 					ROS_INFO("landed\n");
 					flight._current_target++;
+					//landed_pos=state.pos_w;
 					if(flight._current_target > 8){
 						return 0;
 					}
@@ -815,10 +829,13 @@ int main(int argc, char **argv)
 		}
 		else if(flight._state == STATE_INACCURATE){
 			vel_sp_b = state.R_body.transpose() * vel_sp;
-			vel_sp_b(2)=0;
 		}
 		else{
 			vel_sp_b = state.R_body.transpose() * vel_sp;
+		}
+		if(!altitude_correct){
+			next_pos_sp(2) = height_sp;
+			flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
 		}
 //		ROS_INFO("\nvel_body(%f,%f)",vel_sp_b(0),vel_sp_b(1));
 		cmd.linear.x = vel_sp_b(0);

@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<!-- This is a sample lanuch file, please change it based on your needs -->
+<launch>
+    <node name="find_contour" pkg="ardrone_control" type="find_contour" output="screen"/>
+    <node name="recognition" pkg="number_recognition" type="recognition" output="screen"/>
+</launch>
