@@ -54,8 +54,7 @@ int move_flag2 = 0;
 float move_start_x = 0;
 float move_start_y = 0;
 
-float height_sp = 2.5;    //add by CJ
-bool altitude_correct = false;   //add by CJ
+float height_sp = 2.2;    //add by CJ
 
 //const float dists[10][2] = {{0, 0}, {82, -178}, {28, 328}, {66, -161}, {190, -156}, {284, 236}, {-282, 53}, {487, -10}, {-53, -271}, {-347, 105}};
 float coord[10][10][2];
@@ -417,14 +416,7 @@ void States::navCallback(const ardrone_autonomy::Navdata &msg)
 void States::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
 	pos_w(2) = msg.altitude_vision/1000.0;
-	if(absolute_f(height_sp - pos_w(2)) > 0.1){
-		altitude_correct = false;
-	}else{
-		altitude_correct = true;
-	}
 }
-
-
 
 void imagepositionCallback(const ardrone_control::ROI &msg)
 {
@@ -564,47 +556,35 @@ int main(int argc, char **argv)
 					height_sp = NORMAL_HEIGHT;
 					next_pos_sp(2) = height_sp;
 					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
-					// next_pos_sp(1) = landed_pos(1)+TAKEOFF_OFFSET;
-					// flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
-					
 				}
 				break;
 			case STATE_ACCURATE_AFTER_TAKEOFF:
-				if(altitude_correct){
-					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
-					dur = ros::Time::now() - image_stamp;
-					if(dur.toSec() > 0.5 && counter_after_takeoff<=WAIT_TIME){
-						vel_sp(0) = 0;
-						vel_sp(1) = 0;
-						vel_sp(2) = 0;
-						counter_after_takeoff ++;
-					}else if(counter_after_takeoff > WAIT_TIME){
-						if(state.pos_w(2) < THR_HEIGHT){
-							flight._state = STATE_FIND_NUM_AFTER_TAKEOFF;
-
-						}else{
-							flight._state = STATE_FIND_NUM_AFTER_TAKEOFF_MOVE;
-							move_start_x = state.pos_w(0); //chg
-							move_start_y = state.pos_w(1);//chg
-
-						}
-						counter_after_takeoff = 0;
-					}
-
-				}else{
-					next_pos_sp(2) = height_sp;
-					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
+				isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
+				dur = ros::Time::now() - image_stamp;
+				if(dur.toSec() > 0.5 && counter_after_takeoff<=WAIT_TIME){
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
+					vel_sp(2) = 0;
+					counter_after_takeoff ++;
+				}else if(counter_after_takeoff > WAIT_TIME){
+					if(state.pos_w(2) < THR_HEIGHT){
+						flight._state = STATE_FIND_NUM_AFTER_TAKEOFF;
+
+					}else{
+						flight._state = STATE_FIND_NUM_AFTER_TAKEOFF_MOVE;
+						move_start_x = state.pos_w(0); //chg
+						move_start_y = state.pos_w(1);//chg
+
+					}
+					counter_after_takeoff = 0;
 				}
 				break;
 			case STATE_IDLE:
 				isArrived = flight.idle_control(vel_sp);
 				break;
 			case STATE_INACCURATE:
-				
 				isArrived = flight.inaccurate_control(next_pos_sp, state.pos_w, vel_sp);
 				dur = ros::Time::now() - state.navdata_stamp;
 				if(dur.toSec() > 0.5){
@@ -612,32 +592,24 @@ int main(int argc, char **argv)
 					vel_sp(1) = 0;
 					vel_sp(2) = 0;
 				}
-
 				break;
 			case STATE_ACCURATE_BEFORE_LANDING:
-				if(altitude_correct){
-					isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
-					dur = ros::Time::now() - image_stamp;
-					if(dur.toSec() > 0.5 && counter_before_landing<=WAIT_TIME){
-						vel_sp(0) = 0;
-						vel_sp(1) = 0;
-						vel_sp(2) = 0;
-						counter_before_landing ++;
-					}else if(counter_before_landing>WAIT_TIME){
-						if(state.pos_w(2) < THR_HEIGHT){
-							flight._state = STATE_FIND_NUM_BEFORE_LANDING;
-						}else{
-							flight._state = STATE_FIND_NUM_BEFORE_LANDING_MOVE;
-							move_start_x = state.pos_w(0); //chg
-							move_start_y = state.pos_w(1);//chg
-						}
-						counter_before_landing =0;
-					}
-				}else{
-					next_pos_sp(2) = height_sp;
-					altitude_correct = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
+				isArrived = flight.accurate_control(image_pos, state.pos_w(2), vel_sp);
+				dur = ros::Time::now() - image_stamp;
+				if(dur.toSec() > 0.5 && counter_before_landing<=WAIT_TIME){
 					vel_sp(0) = 0;
 					vel_sp(1) = 0;
+					vel_sp(2) = 0;
+					counter_before_landing ++;
+				}else if(counter_before_landing>WAIT_TIME){
+					if(state.pos_w(2) < THR_HEIGHT){
+						flight._state = STATE_FIND_NUM_BEFORE_LANDING;
+					}else{
+						flight._state = STATE_FIND_NUM_BEFORE_LANDING_MOVE;
+						move_start_x = state.pos_w(0); //chg
+						move_start_y = state.pos_w(1);//chg
+					}
+					counter_before_landing =0;
 				}
 				break;
 			case STATE_LANDING:
@@ -766,7 +738,6 @@ int main(int argc, char **argv)
 					break;
 				case STATE_INACCURATE:
 					ROS_INFO("Target %d arrived inaccurately\n", flight._current_target+1);
-				//	flight._current_target++;
 					vel_sp(0)=0;
 					vel_sp(1)=0;
 					vel_sp(2)=0;
@@ -788,7 +759,6 @@ int main(int argc, char **argv)
 							vel_sp(2) = 0;
 							flight._state = STATE_LANDING;
 						}else{
-							//flight._state = STATE_IDLE;
 							flight._state=STATE_ACCURATE_AFTER_TAKEOFF; //modified by Chen
 							ROS_INFO("Wrong number!\n");
 						}
@@ -797,7 +767,6 @@ int main(int argc, char **argv)
 				case STATE_LANDING:
 					ROS_INFO("landed\n");
 					flight._current_target++;
-					//landed_pos=state.pos_w;
 					if(flight._current_target > 8){
 						return 0;
 					}
@@ -805,8 +774,8 @@ int main(int argc, char **argv)
 						flight._state = STATE_TAKEOFF;
 
 					}
-			                vel_sp(0) = 0;
-			                vel_sp(1) = 0;
+	                vel_sp(0) = 0;
+	                vel_sp(1) = 0;
 					break;
 				case STATE_FIND_NUM_AFTER_TAKEOFF:
 					flight._state = STATE_ACCURATE_AFTER_TAKEOFF;
@@ -825,7 +794,6 @@ int main(int argc, char **argv)
 		Vector3f vel_sp_b;
 		if(flight._state == STATE_ACCURATE_BEFORE_LANDING || flight._state == STATE_ACCURATE_AFTER_TAKEOFF){
 			vel_sp_b = vel_sp;
-			//vel_sp_b(2)=0;
 		}
 		else if(flight._state == STATE_INACCURATE){
 			vel_sp_b = state.R_body.transpose() * vel_sp;
@@ -833,10 +801,7 @@ int main(int argc, char **argv)
 		else{
 			vel_sp_b = state.R_body.transpose() * vel_sp;
 		}
-		if(!altitude_correct){
-			next_pos_sp(2) = height_sp;
-			flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
-		}
+
 //		ROS_INFO("\nvel_body(%f,%f)",vel_sp_b(0),vel_sp_b(1));
 		cmd.linear.x = vel_sp_b(0);
 		cmd.linear.y = vel_sp_b(1);
