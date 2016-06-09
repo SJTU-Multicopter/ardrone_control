@@ -707,8 +707,8 @@ int main(int argc, char **argv)
 					vel_sp(2) = 0;
 					
 					if(flight._current_target == 0){
-						next_pos_sp(0) = coord[0][flight._current_target+1][0]+state.pos_w(0);//Modify by CJ
-						next_pos_sp(1) = coord[0][flight._current_target+1][1]+state.pos_w(1);//Modify by CJ
+						next_pos_sp(0) = coord[number][flight._current_target+1][0]+state.pos_w(0);//Modify by CJ
+						next_pos_sp(1) = coord[number][flight._current_target+1][1]+state.pos_w(1);//Modify by CJ
 
 			    		move_flag1=3;
 			    		move_flag2=0;
@@ -722,12 +722,12 @@ int main(int argc, char **argv)
 							next_pos_sp(1) = coord[number][flight._current_target+1][1]+state.pos_w(1);
 							if(flight._current_target+1 == 2||flight._current_target+1 == 6||flight._current_target+1 == 7) 
 					    	{
-					    		move_flag1=5;
+					    		move_flag1=4;
 					    		move_flag2=5;
 					    	}
 						    else 
 						    {
-						    	move_flag1 = 0;
+						    	move_flag1 = 2;
 						    	move_flag2 = 0;
 						    }
 						    flight._state = STATE_INACCURATE;
