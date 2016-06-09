@@ -48,6 +48,7 @@ int number_last = 12;
 
 int counter_after_takeoff = 0;
 int counter_before_landing = 0;
+int takeoff_counter = 0;
 
 int move_flag1 = 0;
 int move_flag2 = 0;
@@ -444,7 +445,7 @@ void calcCoords(float coord[10][10][2])
 	Matrix<float, 3, 3> Rf;
 	dists<<
 	0.0, 0.0, 0.0,
-	0.82,-1.78,0.0,
+	1.85,-1.78,0.0,
 	0.28,2.78,0.0,
 	0.66,-1.61,0.0,
 	1.9,-1.56,0.0,
@@ -553,11 +554,18 @@ int main(int argc, char **argv)
 					landed_pos=state.pos_w;
 				}
 				else{//flying, takeoff completed
-					height_sp = NORMAL_HEIGHT;
-					next_pos_sp(2) = height_sp;
-					isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
-					vel_sp(0) = 0;
-					vel_sp(1) = 0;
+					if(takeoff_counter > 40)
+					{
+						height_sp = NORMAL_HEIGHT;
+						next_pos_sp(2) = height_sp;
+						isArrived = flight.altitude_change(next_pos_sp, state.pos_w, vel_sp);
+						vel_sp(0) = 0;
+						vel_sp(1) = 0;
+						takeoff_counter = 0;
+					}else{
+						takeoff_counter++;
+					}
+					
 				}
 				break;
 			case STATE_ACCURATE_AFTER_TAKEOFF:
