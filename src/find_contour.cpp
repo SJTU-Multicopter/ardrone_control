@@ -50,7 +50,7 @@ FindContour::FindContour()
 	image_pub = n.advertise<ardrone_control::ROI>("/ROI", 1);
 	ROI_image_pub = n.advertise<sensor_msgs::Image>("/ROI_image", 1);
 	maxarea = 150000;
-	minarea = 13000;
+	minarea = 5000;
 	ROI_width = 80;
 	ROI_height = 80;
 	source_image_resized = cvCreateImage(cvSize(640,360),IPL_DEPTH_8U, 3);
@@ -102,7 +102,7 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 	 		continue; 
 	 	}
 		CvRect aRect = cvBoundingRect(contour, 0 );
-		if ((aRect.width/aRect.height)<0.3 || (aRect.width/aRect.height)> 1.7)    
+		if ((aRect.width/aRect.height)<0.2 || (aRect.width/aRect.height)> 1.8)    
 		{    
 			cvSeqRemove(contour,0); 
 			continue;    
@@ -134,47 +134,50 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 		rect.y = target_image[i][1] - ROI_height/2;
 		rect.width = ROI_width;
 		rect.height = ROI_height;
-		IplImage *ROI_image = cvCreateImage(cvSize(ROI_width, ROI_height), IPL_DEPTH_8U, 3);
-		//get the ROI region
-		cvSetImageROI(source_image_resized,rect);
-		cvCopy(source_image_resized,ROI_image);  
-		cvResetImageROI(source_image_resized); 
+		if( (rect.x > 0) && ((rect.x + ROI_width) < 640) && (rect.y > 0) && ((rect.y + ROI_height) < 360))
+		{
+			IplImage *ROI_image = cvCreateImage(cvSize(ROI_width, ROI_height), IPL_DEPTH_8U, 3);
+			//get the ROI region
+			cvSetImageROI(source_image_resized,rect);
+			cvCopy(source_image_resized,ROI_image);  
+			cvResetImageROI(source_image_resized); 
 
-		if(i == 0){
-			cv_to_ros.image = ROI_image;
-			cv_to_ros.header = cv_ptr->header;
-			cv_to_ros.encoding = sensor_msgs::image_encodings::BGR8;
-			ROI_msg.image1  = *(cv_to_ros.toImageMsg());
-			ROI_msg.pose1.x = target_image[i][0];
-			ROI_msg.pose1.y = target_image[i][1];
-			imshow("test1", cv_to_ros.image);
-			waitKey(1);
-			ROI_image_pub.publish(ROI_msg.image1);
+			if(i == 0){
+				cv_to_ros.image = ROI_image;
+				cv_to_ros.header = cv_ptr->header;
+				cv_to_ros.encoding = sensor_msgs::image_encodings::BGR8;
+				ROI_msg.image1  = *(cv_to_ros.toImageMsg());
+				ROI_msg.pose1.x = target_image[i][0];
+				ROI_msg.pose1.y = target_image[i][1];
+				imshow("test1", cv_to_ros.image);
+				waitKey(1);
+				ROI_image_pub.publish(ROI_msg.image1);
 
-		}
+			}
 
-		if(i == 1){
-			cv_to_ros.image = ROI_image;
-			cv_to_ros.header = cv_ptr->header;
-			cv_to_ros.encoding = sensor_msgs::image_encodings::BGR8;
-			ROI_msg.image2  = *(cv_to_ros.toImageMsg());
-			ROI_msg.pose2.x = target_image[i][0];
-			ROI_msg.pose2.y = target_image[i][1];
-			imshow("test2", cv_to_ros.image);
-			waitKey(1);
-		}
+			if(i == 1){
+				cv_to_ros.image = ROI_image;
+				cv_to_ros.header = cv_ptr->header;
+				cv_to_ros.encoding = sensor_msgs::image_encodings::BGR8;
+				ROI_msg.image2  = *(cv_to_ros.toImageMsg());
+				ROI_msg.pose2.x = target_image[i][0];
+				ROI_msg.pose2.y = target_image[i][1];
+				imshow("test2", cv_to_ros.image);
+				waitKey(1);
+			}
 
-		if(i == 2){
-			cv_to_ros.image = ROI_image;
-			cv_to_ros.header = cv_ptr->header;
-			cv_to_ros.encoding = sensor_msgs::image_encodings::BGR8;
-			ROI_msg.image3  = *(cv_to_ros.toImageMsg());
-			ROI_msg.pose3.x = target_image[i][0];
-			ROI_msg.pose3.y = target_image[i][1];
-			imshow("test3", cv_to_ros.image);
-			waitKey(1);
+			if(i == 2){
+				cv_to_ros.image = ROI_image;
+				cv_to_ros.header = cv_ptr->header;
+				cv_to_ros.encoding = sensor_msgs::image_encodings::BGR8;
+				ROI_msg.image3  = *(cv_to_ros.toImageMsg());
+				ROI_msg.pose3.x = target_image[i][0];
+				ROI_msg.pose3.y = target_image[i][1];
+				imshow("test3", cv_to_ros.image);
+				waitKey(1);
+			}	
+			cvReleaseImage(&ROI_image);
 		}	
-		cvReleaseImage(&ROI_image);
 	}
 	if(count != 0){
 		ROI_msg.header.stamp = ros::Time::now();
@@ -193,12 +196,12 @@ void FindContour::imageCallback(const sensor_msgs::Image &msg)
 void FindContour::altitudeCallback(const ardrone_autonomy::navdata_altitude &msg)
 {
 	if(msg.altitude_vision/1000.0 < 3.0){
-		minarea = 13000;
-		maxarea = 150000;
+		minarea = 5000;
+		maxarea = 180000;
 		ROI_width = 80;
 		ROI_height = 80;
 	}else{
-		minarea = 10000;
+		minarea = 5000;
 		maxarea = 50000;
 		ROI_width = 60;
 		ROI_height = 60;

@@ -28,6 +28,7 @@ using namespace Eigen;
 
 bool first_pos_received = false;
 bool first_yaw_received = false;
+bool takeoff_finished = false;
 
 int constrain(int a, int b, int c){return ((a)<(b)?(b):(a)>(c)?c:a);}
 int dead_zone(int a, int b){return ((a)>(b)?(a):(a)<(-b)?(a):0);}
@@ -184,7 +185,7 @@ bool num_flight::inaccurate_control(const Vector3f& _pos_sp, const Vector3f& _po
 	Vector3f err = _pos_sp - _pos;
 	err(2) = 0;
 	float dist = err.norm();
-	if(dist > 0.8){
+	if(dist > 0.6){
 		Vector3f direction = err / dist;
 		vel_sp = direction * speed;
 		is_arrived = false;
@@ -213,7 +214,7 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	static Vector2f err_last;
 	static Vector2f err_int;
 	static bool new_start = true;
-	float P_pos = 0.00015 ,D_pos = 0.00007, I_pos = 0.0;
+	float P_pos = 0.00015 ,D_pos = 0.00007, I_pos = 0.000005;
 	Vector2f vel_sp_2d;
 	Vector2f image_center(320.0,180.0);
 	Vector2f image_pos_2d;
@@ -232,14 +233,14 @@ bool num_flight::accurate_control(const Vector3f& image_pos, float pos_z, Vector
 	vel_sp(0) = -vel_sp_2d(1);
 	vel_sp(1) = -vel_sp_2d(0);
 	vel_sp(2) = 0;
-	if(vel_sp(0)>0.08)vel_sp(0)=0.08;
-	if(vel_sp(0)<-0.08)vel_sp(0)=-0.08;
-	if(vel_sp(1) >0.08)vel_sp(1) =0.08;
-	if(vel_sp(1) <-0.08)vel_sp(1) =-0.08;
+	if(vel_sp(0)>0.05)vel_sp(0)=0.05;
+	if(vel_sp(0)<-0.05)vel_sp(0)=-0.05;
+	if(vel_sp(1) >0.05)vel_sp(1) =0.05;
+	if(vel_sp(1) <-0.05)vel_sp(1) =-0.05;
 	
 	bool is_arrived;
 	float dist = err.norm();
-	if(dist > 30.0){
+	if(dist > 25.0){
 		is_arrived = false;
 	}
 
@@ -554,7 +555,7 @@ int main(int argc, char **argv)
 					landed_pos=state.pos_w;
 				}
 				else{//flying, takeoff completed
-					if(takeoff_counter > 40)
+					if(takeoff_finished)
 					{
 						height_sp = NORMAL_HEIGHT;
 						next_pos_sp(2) = height_sp;
@@ -564,6 +565,9 @@ int main(int argc, char **argv)
 						takeoff_counter = 0;
 					}else{
 						takeoff_counter++;
+						if(takeoff_counter > 120){
+							takeoff_finished = true;
+						}
 					}
 					
 				}
@@ -707,6 +711,7 @@ int main(int argc, char **argv)
 				case STATE_TAKEOFF:
 					ROS_INFO("takeoff finished\n");
 					flight._state = STATE_ACCURATE_AFTER_TAKEOFF;
+					takeoff_finished = false;
 					break;
 				case STATE_ACCURATE_AFTER_TAKEOFF:
 					ROS_INFO("accurate arrived after takeoff\n");
@@ -717,7 +722,7 @@ int main(int argc, char **argv)
 					if(flight._current_target == 0){
 						next_pos_sp(0) = coord[number][flight._current_target+1][0]+state.pos_w(0);//Modify by CJ
 						next_pos_sp(1) = coord[number][flight._current_target+1][1]+state.pos_w(1);//Modify by CJ
-
+						ROS_INFO("from %d to %d ", number, flight._current_target+1);
 			    		move_flag1=3;
 			    		move_flag2=0;
 			    		flight._state = STATE_INACCURATE;
@@ -728,6 +733,7 @@ int main(int argc, char **argv)
 						{	
 							next_pos_sp(0) = coord[number][flight._current_target+1][0]+state.pos_w(0);
 							next_pos_sp(1) = coord[number][flight._current_target+1][1]+state.pos_w(1);
+							ROS_INFO("from %d to %d ", number, flight._current_target+1);
 							if(flight._current_target+1 == 2||flight._current_target+1 == 6||flight._current_target+1 == 7) 
 					    	{
 					    		move_flag1=4;
