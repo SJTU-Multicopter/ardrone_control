@@ -20,7 +20,7 @@ float Color_Detection(IplImage* src,IplImage* dst,double &xpositon,double& yposi
 		for(int j = 0; j < hsv_img->width; j++)
 		{
 			//if(datafloat[i*step + j*channels + 2]>10&&(datafloat[i*step + j*channels + 1]>0.1)&&(datafloat[i*step + j*channels]>130&&datafloat[i*step + j*channels]<310))
-			if((datafloat[i*step + j*channels]>10&&datafloat[i*step + j*channels]<90))
+			if((datafloat[i*step + j*channels]>30&&datafloat[i*step + j*channels]<90)&&(datafloat[i*step + j*channels + 1]>0.2))
 			{
 				// src->imageData[i*(src->widthStep)+j*(src->nChannels)]=255;
 				// src->imageData[i*(src->widthStep)+j*(src->nChannels)+1]=255;
